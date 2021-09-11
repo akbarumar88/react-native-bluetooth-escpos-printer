@@ -125,16 +125,16 @@ public class BluetoothService {
     public synchronized void connect(BluetoothDevice device) {
         if (DEBUG) Log.d(TAG, "connect to: " + device);
         BluetoothDevice connectedDevice = null;
-        if (mConnectedThread != null) {
+        if(mConnectedThread!=null){
             connectedDevice = mConnectedThread.bluetoothDevice();
         }
-        if (mState == STATE_CONNECTED && connectedDevice != null && connectedDevice.getAddress().equals(device.getAddress())) {
+        if( mState==STATE_CONNECTED && connectedDevice!=null && connectedDevice.getAddress().equals(device.getAddress())){
             // connected already
             Map<String, Object> bundle = new HashMap<String, Object>();
             bundle.put(DEVICE_NAME, device.getName());
-            bundle.put(DEVICE_ADDRESS, device.getAddress());
+            bundle.put(DEVICE_ADDRESS,device.getAddress());
             setState(STATE_CONNECTED, bundle);
-        } else {
+        }else {
             // Cancel any thread currently running a connection
             this.stop();
             // Start the thread to manage the connection and perform transmissions
@@ -214,28 +214,35 @@ public class BluetoothService {
             BluetoothSocket tmp = null;
 
             // try to connect with socket inner method firstly.
-            for (int i = 1; i <= 3; i++) {
-                try {
-                    tmp = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", int.class).invoke(mmDevice, i);
-                } catch (Exception e) {
-                }
-                if (tmp != null) {
-                    mmSocket = tmp;
-                    break;
-                }
-            }
+            // for(int i=1;i<=3;i++) {
+            //     try {
+            //         tmp = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", int.class).invoke(mmDevice, i);
+            //     } catch (Exception e) {
+            //         Log.e(TAG, "connect with socket inner method firstly. failed", e);
+            //         // Log.e(TAG, "connect with socket inner method firstly. failed", e.toString());
+            //     }
+            //     if(tmp!=null){
+            //         mmSocket = tmp;
+            //         break;
+            //     }
+            // }
 
             // try with given uuid
-            if (mmSocket == null) {
+            if(mmSocket == null) {
                 try {
                     tmp = mmDevice.createRfcommSocketToServiceRecord(MY_UUID);
+                    // tmp = mmDevice.createInsecureRfcommSocketToServiceRecord(MY_UUID);
                 } catch (IOException e) {
                     e.printStackTrace();
                     Log.e(TAG, "create() failed", e);
+                    Log.d(TAG, "create() failed " + e.getMessage());
+                    // Toast.makeText(this.reactContext,"create() failed: Socket NULL. " + e.getMessage(),Toast.LENGTH_LONG).show();
                 }
                 if (tmp == null) {
                     Log.e(TAG, "create() failed: Socket NULL.");
+                    Log.d(TAG, "create() failed: Socket NULL.");
                     connectionFailed();
+                    
                     return;
                 }
             }
@@ -248,13 +255,30 @@ public class BluetoothService {
                 mmSocket.connect();
             } catch (Exception e) {
                 e.printStackTrace();
-                connectionFailed();
-                // Close the socket
+                // connectionFailed();
+                Log.d(TAG, "unable to mmSocket.connect() socket during connection failure " + e.getMessage());
                 try {
-                    mmSocket.close();
+                    Log.i(TAG,"Trying fallback...");
+                    mmSocket =(BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(mmDevice,1);
+                    mmSocket.connect();
+                    Log.i(TAG,"Connected");
                 } catch (Exception e2) {
-                    Log.e(TAG, "unable to close() socket during connection failure", e2);
+                    Log.e(TAG, "Couldn't establish Bluetooth connection!", e2);
+                    try {
+                        mmSocket.close();
+                    } catch (IOException e3) {
+                        Log.e(TAG, "unable to close()  socket during connection failure", e3);
+                    }
+                    connectionFailed();
+                    return;
                 }
+                // Toast.makeText(this.reactContext,"unable to close() socket during connection failure " + e.getMessage(),Toast.LENGTH_LONG).show();
+                // Close the socket
+                // try {
+                //     mmSocket.close();
+                // } catch (Exception e2) {
+                //     Log.e(TAG, "unable to close() socket during connection failure", e2);
+                // }
                 return;
             }
 
@@ -275,14 +299,11 @@ public class BluetoothService {
             mmOutStream = tmpOut;
 
             bundle.put(DEVICE_NAME, mmDevice.getName());
-            bundle.put(DEVICE_ADDRESS, mmDevice.getAddress());
+            bundle.put(DEVICE_ADDRESS,mmDevice.getAddress());
             setState(STATE_CONNECTED, bundle);
 
             Log.i(TAG, "Connected");
             int bytes;
-
-            //keep the address of last connected device and get this address directly in the .js code
-            mLastConnectedDeviceAddress = mmDevice.getAddress();
 
             // Keep listening to the InputStream while connected
             while (true) {
